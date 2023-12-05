@@ -59,6 +59,8 @@ include { KRAKEN2_DB_PREPARATION    } from '../modules/local/kraken2_db_preparat
 include { BUSCO                                 } from '../modules/local/busco/main'
 include { ITSX                                  } from '../modules/local/itsx'
 include { HELIXER                               } from '../modules/local/helixer'
+include { GFF2PROTEIN                           } from '../modules/local/gff2protein'
+include { MERGE_FUNC_ANNOTATION                 } from '../modules/local/merge_func_annotation'
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -87,6 +89,8 @@ include { QUAST                                 } from '../modules/nf-core/quast
 include { GUNZIP                                } from '../modules/nf-core/gunzip/main'
 include { CUSTOM_DUMPSOFTWAREVERSIONS           } from '../modules/nf-core/custom/dumpsoftwareversions/main'
 include { MULTIQC                               } from '../modules/nf-core/multiqc/main'
+include { INTERPROSCAN                          } from '../modules/nf-core/interproscan/main'  
+include { BLAST_BLASTP                         } from '../modules/nf-core/blast/blastp/main'                                                      
 
 //
 // SUBWORKFLOWS: Consisting of a mix of local and nf-core/modules
@@ -354,10 +358,30 @@ workflow FUNPHEHR {
 
     ch_versions = ch_versions.mix(HELIXER.out.versions.ifEmpty(null))
 
-    
+     GFF2PROTEIN( 
+        helixer.out.gff, 
+        ch_assembly_for_annotation
+    )
+    ch_versions = ch_versions.mix(GFF2PROTEIN.out.versions.ifEmpty(null))
+
+    BLAST_BLASTP (
+        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true)
+        params.blast_db_directory
     }
 
+    INTERPROSCAN (
+        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true),
+        params.interproscan_db_directory
+    )
+    ch_versions = ch_versions.mix(INTERPROSCAN.out.versions.ifEmpty(null))
 
+    MERGE_FUNC_ANNOTATION (
+        HELIXER.out.gff,
+        INTERPROSCAN.out.tsv,
+        BLAST_BLASTP.out.tsv,
+        params.blast_db_directory
+    )
+    
 
     //
     // MODULE: Pipeline reporting
