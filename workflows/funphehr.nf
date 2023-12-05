@@ -110,8 +110,8 @@ workflow FUNPHEHR {
     // SUBWORKFLOW: Read in samplesheet, validate and stage input files
     //
     def criteria = multiMapCriteria {
-        meta, long_fastq ->
-            longreads: long_fastq   != 'NA' ? tuple(meta, long_fastq)         : null
+        meta, longFastq ->
+            longreads: longFastq   != 'NA' ? tuple(meta, longFastq)         : null
     }
     // See the documentation https://nextflow-io.github.io/nf-validation/samplesheets/fromSamplesheet/
     Channel
@@ -156,7 +156,7 @@ workflow FUNPHEHR {
         ch_porechop_log_multiqc = PORECHOP_PORECHOP.out.log
         ch_versions = ch_versions.mix( PORECHOP_PORECHOP.out.versions.ifEmpty(null) )
     
-   
+    
     
     ch_for_kraken2 = PORECHOP_PORECHOP.out.reads
     PORECHOP_PORECHOP.out.reads
@@ -347,7 +347,17 @@ workflow FUNPHEHR {
             params.annotation_method,
             params.annotation_db,
         )
+
+    HELIXER (
+        ch_assembly_for_annotation
+    )
+
+    ch_versions = ch_versions.mix(HELIXER.out.versions.ifEmpty(null))
+
+    
     }
+
+
 
     //
     // MODULE: Pipeline reporting

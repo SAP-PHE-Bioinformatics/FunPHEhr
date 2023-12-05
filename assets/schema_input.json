@@ -1,7 +1,7 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
-    "$id": "https://raw.githubusercontent.com/nf-core/funphehr/master/assets/schema_input.json",
-    "title": "nf-core/funphehr - params.input schema",
+    "$id": "https://raw.githubusercontent.com/nf-core/bacass/master/assets/schema_input.json",
+    "title": "nf-core/bacass pipeline - params.input schema",
     "description": "Schema for the file provided with params.input",
     "type": "array",
     "items": {
@@ -13,36 +13,8 @@
                 "unique": true,
                 "errorMessage": "Sample name must be provided and cannot contain spaces",
                 "meta": ["id"]
-            }, 
-            "R1": {
-                "errorMessage": "FastQ file for reads 1 must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'",
-                "anyOf": [
-                    {
-                        "type": ["string", "null"],
-                        "exists": true,
-                        "pattern": "^(\\S+\\.f(ast)?q\\.gz|NA)$"
-                    },
-                    {
-                        "type": "string",
-                        "maxLength": 0
-                    }
-                ]
             },
-            "R2": {
-                "errorMessage": "FastQ file for reads 2 cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'",
-                "anyOf": [
-                    {
-                        "type": ["string", "null"],
-                        "exists": true,
-                        "pattern": "^(\\S+\\.f(ast)?q\\.gz|NA)$"
-                    },
-                    {
-                        "type": "string",
-                        "maxLength": 0
-                    }
-                ]
-            },
-            "LongFastQ": {
+            "longFastq": {
                 "errorMessage": "FastQ file for long reads cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'",
                 "anyOf": [
                     {
@@ -56,24 +28,7 @@
                     }
                 ]
             },
-            "Species": {
-                "errorMessage": "Species name must be provided and cannot contain spaces",
-                "type": ["string", "null"],
-                "pattern": "^\\S+$",
-                "meta": ["species"],
-                "anyOf": [
-                    {
-                        "type": ["string", "null"],
-                        "pattern": "^\\S+$"
-                    },
-                    {
-                        "type": "string",
-                        "maxLength": 0
-                    }
-                ]
-            },
-
-            "GenomeSize": {
+            "genomeSize": {
                 "errorMessage": "A number (including decimals) ending with 'm', representing genome size. No spaces allowed.",
                 "meta": ["gsize"],
                 "anyOf": [
@@ -86,9 +41,22 @@
                         "maxLength": 0
                     }
                 ]
+            },
+            "species": {
+                "errorMessage": "A string representing the species name. No spaces allowed.",
+                "meta": ["species"],
+                "anyOf": [
+                    {
+                        "type": ["string", "null"],
+                        "pattern": "(\\b\\S+\\b|NA)"
+                    },
+                    {
+                        "type": "string",
+                        "maxLength": 0
+                    }
+                ]
             }
         },
         "required": ["ID"]
     }
 }
-

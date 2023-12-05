@@ -2,7 +2,7 @@
     "$schema": "http://json-schema.org/draft-07/schema",
     "$id": "https://raw.githubusercontent.com/nf-core/funphehr/master/nextflow_schema.json",
     "title": "nf-core/funphehr pipeline parameters",
-    "description": "a pipeline for all things fungal",
+    "description": "fungal assembly and annotation",
     "type": "object",
     "definitions": {
         "input_output_options": {
@@ -14,13 +14,11 @@
             "properties": {
                 "input": {
                     "type": "string",
-                    "format": "file-path",
-                    "exists": true,
-                    "mimetype": "text/csv",
-                    "pattern": "^\\S+\\.csv$",
-                    "description": "Path to comma-separated file containing information about the samples in the experiment.",
-                    "help_text": "You will need to create a design file with information about the samples in your experiment before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row. See [usage docs](https://nf-co.re/funphehr/usage#samplesheet-input).",
-                    "fa_icon": "fas fa-file-csv",
+                    "exist": true,
+                    "mimetype": "text/tsv",
+                    "fa_icon": "fas fa-dna",
+                    "description": "Path to tab-separated sample sheet",
+                    "help_text": "Path to sample sheet, either tab-separated (.tsv), comma-separated (.csv), or in YAML format (.yml/.yaml), that points to compressed fastq files.\n\nThe sample sheet must have six tab-separated columns/entries with the following headers: \n- `ID` (required): Unique sample IDs, must start with a letter, and can only contain letters, numbers or underscores\n- `R1` (optional): Paths to (forward) reads zipped FastQ files\n- `R2` (optional): Paths to reverse reads zipped FastQ files, required if the data is paired-end\n- `LongFastQ` (optional): Paths to long reads zipped FastQ files\n- `Fast5` (optional): Paths to the directory containing FAST5 files\n- `GenomeSize` (optional): A number (including decimals) ending with 'm', representing genome size.\n\n Please be aware that files will be required based on the chosen assembly type specified with the '--assembly_type' option, which can be set to one of the following values: ['short', 'long', 'hybrid'].`",
                     "schema": "assets/schema_input.json"
                 },
                 "outdir": {
@@ -35,11 +33,101 @@
                     "fa_icon": "fas fa-envelope",
                     "help_text": "Set this parameter to your e-mail address to get a summary e-mail with details of the run sent to you when the workflow exits. If set in your user config file (`~/.nextflow/config`) then you don't need to specify this on the command line for every run.",
                     "pattern": "^([a-zA-Z0-9_\\-\\.]+)@([a-zA-Z0-9_\\-\\.]+)\\.([a-zA-Z]{2,5})$"
-                },
-                "multiqc_title": {
+                }
+            }
+        },
+        "contamination_screening": {
+            "title": "Contamination Screening",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "fa_icon": "fas fa-box",
+            "properties": {
+                "kraken2db": {
                     "type": "string",
-                    "description": "MultiQC report title. Printed as page header, used for filename if not otherwise specified.",
-                    "fa_icon": "fas fa-file-signature"
+                    "fa_icon": "fab fa-gitkraken",
+                    "help_text": "See [Kraken2 homepage](https://benlangmead.github.io/aws-indexes/k2) for download\nlinks. Minikraken2 8GB is a reasonable choice, since we run Kraken here mainly just to check for\nsample purity.",
+                    "description": "Path to Kraken2 database."
+                }
+            }
+        },
+        "assembly_parameters": {
+            "title": "Assembly parameters",
+            "type": "object",
+            "description": "Parameters for the assembly",
+            "default": "",
+            "fa_icon": "fas fa-puzzle-piece",
+            "properties": {
+                "assembler": {
+                    "type": "string",
+                    "default": "flye",
+                    "fa_icon": "fas fa-puzzle-piece",
+                    "description": "The assembler to use for assembly. Available options are `Miniasm`, or `flye`.",
+                    "enum": ["miniasm", "flye"]
+                },
+                "assembly_type": {
+                    "type": "string",
+                    "default": "short",
+                    "fa_icon": "fas fa-fingerprint",
+                    "help_text": "This adjusts the type of assembly done with the input data and can be any of `long`, `short` or `hybrid`. Short & Hybrid assembly will always run Unicycler, whereas long-read assembly can be configured separately using the `--assembler` parameter.",
+                    "description": "Which type of assembly to perform."
+                },
+                "miniasm_args": {
+                    "type": "string",
+                    "description": "Extra arguments for [Miniasm]"
+                },
+                "flye_args": {
+                    "type": "string",
+                    "description": "Extra arguments for [flye]()",
+                    "help_text": "This advanced option allows you to add extra arguments to flye (e.g.: `\"--gsize 2.4m\"`)."
+                }
+            }
+        },
+        "assembly_polishing": {
+            "title": "Assembly Polishing",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "fa_icon": "fas fa-user-astronaut",
+            "properties": {
+                "polish_method": {
+                    "type": "string",
+                    "default": "medaka",
+                    "fa_icon": "fas fa-hotdog",
+                    "description": "Which assembly polishing method to use.",
+                    "help_text": "Can be used to define which polishing method is used by default for long reads. Default is `medaka`, available options are `nanopolish` or `medaka`."
+                }
+            }
+        },
+        "skipping_options": {
+            "title": "Skipping Options",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "fa_icon": "fas fa-forward",
+            "properties": {
+                "skip_kraken2": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-forward",
+                    "description": "Skip running Kraken2 classifier on reads."
+                },
+                "skip_pycoqc": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-forward",
+                    "description": "Skip running `PycoQC` on long read input."
+                },
+                "skip_polish": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-forward",
+                    "description": "Skip polishing the long-read assembly with fast5 input. Will not affect short/hybrid assemblies."
+                },
+                "skip_multiqc": {
+                    "type": "boolean",
+                    "description": "Skip MultiQC"
+                },
+                "skip_busco": {
+                    "type": "boolean",
+                    "description": "Skip BUSCO"
                 }
             }
         },
@@ -154,6 +242,11 @@
                     "enum": ["symlink", "rellink", "link", "copy", "copyNoFollow", "move"],
                     "hidden": true
                 },
+                "multiqc_title": {
+                    "type": "string",
+                    "description": "MultiQC report title. Printed as page header, used for filename if not otherwise specified.",
+                    "fa_icon": "fas fa-file-signature"
+                },
                 "email_on_fail": {
                     "type": "string",
                     "description": "Email address for completion summary, only when pipeline fails.",
@@ -247,6 +340,18 @@
     "allOf": [
         {
             "$ref": "#/definitions/input_output_options"
+        },
+        {
+            "$ref": "#/definitions/contamination_screening"
+        },
+        {
+            "$ref": "#/definitions/assembly_parameters"
+        },
+        {
+            "$ref": "#/definitions/assembly_polishing"
+        },
+        {
+            "$ref": "#/definitions/skipping_options"
         },
         {
             "$ref": "#/definitions/institutional_config_options"

@@ -1,64 +1,58 @@
-# ![nf-core/funphehr](docs/images/nf-core-funphehr_logo_light.png#gh-light-mode-only) ![nf-core/funphehr](docs/images/nf-core-funphehr_logo_dark.png#gh-dark-mode-only)
+# ![nf-funPHEhr](docs/images/nf-core-funphehr_logo_light.png#gh-light-mode-only) ![funPHEhr](docs/images/nf-core-funphehr_logo_dark.png#gh-dark-mode-only)
 
-[![GitHub Actions CI Status](https://github.com/nf-core/funphehr/workflows/nf-core%20CI/badge.svg)](https://github.com/nf-core/funphehr/actions?query=workflow%3A%22nf-core+CI%22)
-[![GitHub Actions Linting Status](https://github.com/nf-core/funphehr/workflows/nf-core%20linting/badge.svg)](https://github.com/nf-core/funphehr/actions?query=workflow%3A%22nf-core+linting%22)[![AWS CI](https://img.shields.io/badge/CI%20tests-full%20size-FF9900?labelColor=000000&logo=Amazon%20AWS)](https://nf-co.re/funphehr/results)[![Cite with Zenodo](http://img.shields.io/badge/DOI-10.5281/zenodo.XXXXXXX-1073c8?labelColor=000000)](https://doi.org/10.5281/zenodo.XXXXXXX)
-
-[![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.04.0-23aa62.svg)](https://www.nextflow.io/)
-[![run with conda](http://img.shields.io/badge/run%20with-conda-3EB049?labelColor=000000&logo=anaconda)](https://docs.conda.io/en/latest/)
-[![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
-[![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
-[![Launch on Nextflow Tower](https://img.shields.io/badge/Launch%20%F0%9F%9A%80-Nextflow%20Tower-%234256e7)](https://tower.nf/launch?pipeline=https://github.com/nf-core/funphehr)
-
-[![Get help on Slack](http://img.shields.io/badge/slack-nf--core%20%23funphehr-4A154B?labelColor=000000&logo=slack)](https://nfcore.slack.com/channels/funphehr)[![Follow on Twitter](http://img.shields.io/badge/twitter-%40nf__core-1DA1F2?labelColor=000000&logo=twitter)](https://twitter.com/nf_core)[![Follow on Mastodon](https://img.shields.io/badge/mastodon-nf__core-6364ff?labelColor=FFFFFF&logo=mastodon)](https://mstdn.science/@nf_core)[![Watch on YouTube](http://img.shields.io/badge/youtube-nf--core-FF0000?labelColor=000000&logo=youtube)](https://www.youtube.com/c/nf-core)
 
 ## Introduction
 
-**nf-core/funphehr** is a bioinformatics pipeline that ...
+**nf-funphehr** is a bioinformatics pipeline that can be used to analyse Nanopore sequencing data obtained from fungal isolates. It takes a samplesheet and fastq files as input, performs QC, trimming, assembly, assembly QC and annotation(in dev). This is the public version of the developing pipeline being trialled at SA Pathology. 
 
-<!-- TODO nf-core:
-   Complete this sentence with a 2-3 sentence summary of what types of data the pipeline ingests, a brief overview of the
-   major pipeline sections and the types of output it produces. You're giving an overview to someone new
-   to nf-core here, in 15-20 seconds. For an example, see https://github.com/nf-core/rnaseq/blob/master/README.md#introduction
--->
+![nf-funphehr metro map](docs/images/nf-funphehr_metro_map.png)
+1. Trim adapters ([`FastQC`](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/))
+2. Trim low quality and short reads (['chopper`](https://github.com/wdecoster/chopper))
+3. Present QC of reads post trimming (['Nanoplot'](https://github.com/wdecoster/NanoPlot))
+4. Screen reads for contamination (['kraken2'](https://github.com/DerrickWood/kraken2))
+5. Denovo Assembly
+   - flye (['flye'](https://github.com/fenderglass/Flye))
+   OR 
+   miniasm -> minimap2 -> racon 
+   (['miniasm'](https://github.com/lh3/miniasm))
+   (['minimap2'](https://github.com/lh3/minimap2))
+   (['racon'](https://github.com/lbcb-sci/racon))
 
-<!-- TODO nf-core: Include a figure that guides the user through the major workflow steps. Many nf-core
-     workflows use the "tube map" design for that. See https://nf-co.re/docs/contributing/design_guidelines#examples for examples.   -->
-<!-- TODO nf-core: Fill in short bullet-pointed list of the default steps in the pipeline -->
-
-1. Read QC ([`FastQC`](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/))
-2. Present QC for raw reads ([`MultiQC`](http://multiqc.info/))
+6. Polishing reads (optional) (['medaka'], (https://github.com/nanoporetech/medaka))
+7. extract of ITS1-5.8S-ITS2 region (['ITSx'](https://microbiology.se/software/itsx/))
+8. Assembly assessment report ([`QUAST`](http://quast.sourceforge.net/quast))
+9. Assembly quality (['BUSCO'](https://busco.ezlab.org/))
+4. Present metrics from run ([`MultiQC`](http://multiqc.info/))
 
 ## Usage
-
 :::note
 If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how
 to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline)
 with `-profile test` before running the workflow on actual data.
 :::
 
-<!-- TODO nf-core: Describe the minimum required steps to execute the pipeline, e.g. how to prepare samplesheets.
-     Explain what rows and columns represent. For instance (please edit as appropriate):
+** Please not nextflow.config file may need to be have paths updated for databases for kraken2, busco and for annotation steps
 
 First, prepare a samplesheet with your input data that looks as follows:
 
 `samplesheet.csv`:
 
 ```csv
-sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
+ID,LongFastq,GenomeSize, species
+231862455,./data/S1_long_fastq.gz,14.0m,"Candida albicans"
+231495562,./data/S1_long_fastq.gz,26.0m,"Candida parapsilosis"
+
 ```
 
-Each row represents a fastq file (single-end) or a pair of fastq files (paired end).
-
--->
+Each row represents a fastq file (single-end) of long reads.
 
 Now, you can run the pipeline using:
 
 <!-- TODO nf-core: update the following command to include all required parameters for a minimal example -->
 
 ```bash
-nextflow run nf-core/funphehr \
-   -profile <docker/singularity/.../institute> \
+nextflow run https://github.com/SAP-PHE-Bioinformatics/FunPHEhr/ \
+   -profile <docker/apptainer/singularity/...> \
    --input samplesheet.csv \
    --outdir <OUTDIR>
 ```
@@ -69,7 +63,6 @@ provided by the `-c` Nextflow option can be used to provide any configuration _*
 see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 :::
 
-For more details and further functionality, please refer to the [usage documentation](https://nf-co.re/funphehr/usage) and the [parameter documentation](https://nf-co.re/funphehr/parameters).
 
 ## Pipeline output
 
@@ -79,11 +72,41 @@ For more details about the output files and reports, please refer to the
 
 ## Credits
 
-nf-core/funphehr was originally written by jacob.
+nf-funphehr was originally written by jacob.
 
-We thank the following people for their extensive assistance in the development of this pipeline:
+Thank you to all and acknowledgement to all the authors of tools used. 
+* __[chopper](https://github.com/wdecoster/chopper)__  
+Rust implementation of NanoFilt+NanoLyse, both originally written in Python. This tool, intended for long read sequencing such as PacBio or ONT, filters and trims a fastq file.
+_Wouter De Coster, Rosa Rademakers, [NanoPack2: population-scale evaluation of long-read sequencing data](https://doi.org/10.1093/bioinformatics/btad311, Bioinformatics, (2023)_  
 
-<!-- TODO nf-core: If applicable, make list of people who have also contributed -->
+* __[Flye](https://github.com/fenderglass/Flye)__  
+De novo assembler for single molecule sequencing reads using repeat graphs  
+_Kolmogorov, M, Yuan, J, Lin, Y, Pevzner, P, [Assembly of Long Error-Prone Reads Using Repeat Graphs](https://doi.org/10.1038/s41587-019-0072-8), Nature Biotechnology, (2019)_  
+
+* __[Minimap2](https://github.com/lh3/minimap2)__  
+A versatile pairwise aligner for genomic and spliced nucleotide sequences  
+_Li, H [Minimap2: pairwise alignment for nucleotide sequences.](https://doi.org/10.1093/bioinformatics/bty191) Bioinformatics, 34:3094-3100. (2018)_  
+
+* __[Miniasm](https://github.com/lh3/miniasm)__  
+Ultrafast de novo assembly for long noisy reads (though having no consensus step)  
+_Li, H [Miniasm: Ultrafast de novo assembly for long noisy reads](https://github.com/lh3/miniasm_  
+
+* __[Medaka](https://github.com/nanoporetech/medaka)__  
+Sequence correction provided by ONT Research  
+_Li, H [Medaka: Sequence correction provided by ONT Research](https://github.com/nanoporetech/medaka)_  
+
+* __[Porechop](https://github.com/rrwick/Porechop)__  
+Adapter trimmer for Oxford Nanopore reads  
+_Wick, RR, Judd, LM, Gorrie, CL, Holt, KE, [Completing bacterial genome assemblies with multiplex MinION sequencing.](https://doi.org/10.1099/mgen.0.000132) Microb Genom. 3(10):e000132 (2017)_  
+
+* __[BUSCO](https://busco.ezlab.org/)__  
+Adapter trimmer for Oxford Nanopore reads  
+_Mosè Manni, Matthew R Berkeley, Mathieu Seppey, Felipe A Simão, Evgeny M Zdobnov, [C BUSCO Update: Novel and Streamlined Workflows along with Broader and Deeper Phylogenetic Coverage for Scoring of Eukaryotic, Prokaryotic, and Viral Genomes](https://doi.org/10.1093/molbev/msab199) Molecular Biology and Evolution (2021)_  
+
+
+* __[Racon](https://github.com/lbcb-sci/racon)__  
+Ultrafast consensus module for raw de novo genome assembly of long uncorrected reads  
+_Vaser, R, Sović, I, Nagarajan, N, Šikić, M, [Fast and accurate de novo genome assembly from long uncorrected reads.](http://dx.doi.org/10.1101/gr.214270.116) Genome Res. 27, 737–746 (2017)._  
 
 ## Contributions and Support
 
@@ -93,10 +116,7 @@ For further information or help, don't hesitate to get in touch on the [Slack `#
 
 ## Citations
 
-<!-- TODO nf-core: Add citation for pipeline after first release. Uncomment lines below and update Zenodo doi and badge at the top of this file. -->
-<!-- If you use  nf-core/funphehr for your analysis, please cite it using the following doi: [10.5281/zenodo.XXXXXX](https://doi.org/10.5281/zenodo.XXXXXX) -->
-
-<!-- TODO nf-core: Add bibliography of tools and data used in your pipeline -->
+This pipeline was built using nextflow and following nf-core template. 
 
 An extensive list of references for the tools used by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
 
