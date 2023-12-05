@@ -1,0 +1,3 @@
+ID,fastq_1,fastq_2,long_fastq,genome_size,species
+232555,,,~/Downloads/test1.fastq.gz,5.0m,test1
+4515512,,,~/Downloads/test2.fastq.gz,45.0m,test2
