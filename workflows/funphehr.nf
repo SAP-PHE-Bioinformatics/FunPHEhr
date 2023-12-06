@@ -59,8 +59,8 @@ include { KRAKEN2_DB_PREPARATION    } from '../modules/local/kraken2_db_preparat
 include { BUSCO                                 } from '../modules/local/busco/main'
 include { ITSX                                  } from '../modules/local/itsx'
 include { HELIXER                               } from '../modules/local/helixer'
-include { GFF2PROTEIN                           } from '../modules/local/gff2protein'
-include { MERGE_FUNC_ANNOTATION                 } from '../modules/local/merge_func_annotation'
+include { AGAT_EXTRACTSEQUENCES as GFF2PROTEIN                           } from '../modules/local/agat_extract_protein'
+include { AGAT_MANAGEFUNCTIONALANNOTATION as MERGE_FUNC_ANNOTATION                 } from '../modules/local/agat_merge_func_annotation'
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -142,16 +142,17 @@ workflow FUNPHEHR {
     CHOPPER (
         PORECHOP_PORECHOP.out.reads
     )
+    ch_versions= ch_versions.mix(CHOPPER.out.versions.ifEmpty(null))
     
     ch_for_kraken2 = PORECHOP_PORECHOP.out.reads
-    CHOPPER.out.chopped_reads
+    CHOPPER.out.fastq
         .dump(tag: 'porechop')
         .map{ meta,lr -> tuple(meta,lr) }
         .dump(tag: 'ch_for_assembly')
         .set { ch_for_assembly }
 
     NANOPLOT (
-        CHOPPER.out.chopped_reads
+        CHOPPER.out.fastq
     )
     ch_nanoplot_txt_multiqc = NANOPLOT.out.txt
     ch_versions = ch_versions.mix(NANOPLOT.out.versions.ifEmpty(null))
@@ -356,7 +357,7 @@ workflow FUNPHEHR {
     BLAST_BLASTP (
         GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true)
         params.blast_db_directory
-    }
+    )
 
     INTERPROSCAN (
         GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true),
@@ -370,7 +371,7 @@ workflow FUNPHEHR {
         BLAST_BLASTP.out.tsv,
         params.blast_db_directory
     )
-
+    }
 
     //
     // MODULE: Pipeline reporting
