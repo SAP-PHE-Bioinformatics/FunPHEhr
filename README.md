@@ -134,7 +134,7 @@ Suite of tools to handle gene annotations in any GTF/GFF format.
 _Dainat J. [AGAT: Another Gff Analysis Toolkit to handle annotations in any GTF/GFF format](https://www.doi.org/10.5281/zenodo.3552717) Zenodo ._  
 
 
-## Pipline name
+## Pipeline name
 Context for the name of this pipeline, the name funPHEhr orginates from Lex Leong, Genomic Lead of the SA Pathology Public Health and Epidemiology Lab. He has a challenge to get the abbrevation of our Lab (PHE) into all the names of our pipelines. This pipeline was not immune and has been given the name funPHEhr where the logo for this pipeline is a fair/fete tent as seen below in image of the SA Path PHE pipelines. You can try and work our the other pipeline names using the logos.
 
 ![phe_pipelines](docs/images/phe_pipelines.png)
