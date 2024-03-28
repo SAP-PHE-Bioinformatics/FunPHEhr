@@ -51,6 +51,30 @@
                 }
             }
         },
+        "trimming_parameters": {
+            "title": "Trimming Parameters",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "fa_icon": "fas fa-box",
+            "properties": {
+                "min_q_score": {
+                    "type": "integer",
+                    "fa_icon": "fab fa-",
+                    "default": 15,
+                    "help_text": "Q-score for trimming eg Q20 = 20, Q15=15 etc",
+                    "description": "Minimum Q score for reads."
+                },
+                "min_read_length": {
+                    "type": "integer",
+                    "fa_icon": "fab fa-",
+                    "default": 500,
+                    "help_text": "Minimum length of reads to keep eg default is reads > 1000bp",
+                    "description": "Minimum length of reads to keep."
+                }
+            }
+        },
+
         "assembly_parameters": {
             "title": "Assembly parameters",
             "type": "object",
@@ -67,9 +91,9 @@
                 },
                 "assembly_type": {
                     "type": "string",
-                    "default": "short",
+                    "default": "long",
                     "fa_icon": "fas fa-fingerprint",
-                    "help_text": "This adjusts the type of assembly done with the input data and can be any of `long`, `short` or `hybrid`. Short & Hybrid assembly will always run Unicycler, whereas long-read assembly can be configured separately using the `--assembler` parameter.",
+                    "help_text": "This adjusts the type of assembly done with the input data and can be any of `long`, `short` or `hybrid`. Short & Hybrid assembly not supported currently",
                     "description": "Which type of assembly to perform."
                 },
                 "miniasm_args": {
@@ -99,6 +123,37 @@
                 }
             }
         },
+
+        "db_paths": {
+            "title": "Database paths",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "fa_icon": "fas fa-user-astronaut",
+            "properties": {
+                "blast_db_directory": {
+                    "type": "string",
+                    "default": "/scratch/funphehr/blast_db",
+                    "fa_icon": "fas fa-hotdog",
+                    "description": "Blast db for annotation",
+                    "help_text": "dbs default is in scratch/funphehr/blast_db"
+                },
+                "busco_db_path": {
+                    "type": "string",
+                    "default": "/scratch/funphehr/busco",
+                    "fa_icon": "fas fa-hotdog",
+                    "description": "Busco db for annotation, assembly assessment",
+                    "help_text": "dbs default is in scratch/funphehr/busco_db"
+                },
+                "interproscan_db_directory": {
+                    "type": "string",
+                    "default": "/scratch/funphehr/interproscan_db",
+                    "fa_icon": "fas fa-hotdog",
+                    "description": "Interproscan db for annotation",
+                    "help_text": "dbs default is in scratch/funphehr/interpro"
+                }
+            }
+        },
         "skipping_options": {
             "title": "Skipping Options",
             "type": "object",
@@ -110,11 +165,6 @@
                     "type": "boolean",
                     "fa_icon": "fas fa-forward",
                     "description": "Skip running Kraken2 classifier on reads."
-                },
-                "skip_pycoqc": {
-                    "type": "boolean",
-                    "fa_icon": "fas fa-forward",
-                    "description": "Skip running `PycoQC` on long read input."
                 },
                 "skip_polish": {
                     "type": "boolean",
@@ -128,6 +178,10 @@
                 "skip_busco": {
                     "type": "boolean",
                     "description": "Skip BUSCO"
+                },
+                "skip_annotation": {
+                    "type": "boolean",
+                    "description": "Skip Annotation steps"
                 }
             }
         },
@@ -346,6 +400,11 @@
         },
         {
             "$ref": "#/definitions/assembly_parameters"
+
+        },
+
+        {
+            "$ref": "#/definitions/trimming_parameters"
         },
         {
             "$ref": "#/definitions/assembly_polishing"

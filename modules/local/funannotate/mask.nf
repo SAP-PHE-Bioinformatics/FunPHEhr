@@ -1,12 +1,8 @@
-// itsx nf-core module
-
-// The docker image used
-
-process ITSX {
+process FUNANNOTATE_MASK {
     tag "$meta.id"
     label 'process_medium'
-    conda 'bioconda::itsx 1.1.3'
-    container "${'docker://quay.io/biocontainers/itsx:1.1.3--0'}"
+    conda 'bioconda:: funannotate 1.8.15'
+    container "${'docker://quay.io/biocontainers/funannotate:1.8.15--pyhdfd78af_2'}"
 
 
     // The process takes a fasta file as input
@@ -14,10 +10,8 @@ process ITSX {
     tuple val(meta), file(fasta)
     // The process outputs a fasta file
     output:
-    tuple val(meta), path('*.full.fasta')         , emit: itsx_full
-    tuple val(meta), path('*.summary.txt')         , emit: istx_summary, optional: true
+    tuple val(meta), path('*_masked.fasta')         , emit: masked
     path "versions.yml"                             , emit: versions
-    tuple val(meta), path("*.*")               , emit: results
     
     // The command to run
     script:
@@ -30,12 +24,11 @@ process ITSX {
     else
         cp ${fasta} ${prefix}.fasta
     fi
-    ITSx -i ${prefix}.fasta -o ${prefix} --save_regions all --cpu $task.cpus --nhmmer T
+    funannotate mask -i ${prefix}.fasta -o ${prefix}_masked.fasta
 
-
-     cat <<-END_VERSIONS > versions.yml
+    cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        ITSx: 1.1.3
+         funannotate: \$( funannotate --version 2>&1 | sed 's/funannotate //g' )
     END_VERSIONS
     """
 }

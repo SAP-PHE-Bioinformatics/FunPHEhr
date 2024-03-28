@@ -5,8 +5,7 @@ process HELIXER {
     label 'process_high'
 
     conda 'helixer=0.3.2'
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ? 
-        'docker://gglyptodon/helixer-docker:helixer_v0.3.2_cuda_11.8.0-cudnn8' : 'gglyptodon/helixer-docker:helixer_v0.3.2_cuda_11.8.0-cudnn8' }"
+    container 'docker://gglyptodon/helixer-docker:helixer_v0.3.2_cuda_11.8.0-cudnn8'
 
     input:
     tuple val(meta), file(fasta)
@@ -22,15 +21,15 @@ process HELIXER {
     def args                    = task.ext.args ?: ''
     def prefix                  = task.ext.prefix ?: "${meta.id}"
     def species                 = task.ext.species ?: "${meta.species}"
-    if ("$fasta".endsWith('.gz')) { reads_bgzip_out     = "${prefix}.fasta.bgz"} else { reads_bgzip_out    = null }
+    //replace any space in species with _
+    species                     = species.replaceAll("\\s", "_")
+
 
     """
-    # Recompress with bgzip
-    $reads_bgzip_command
-
     Helixer.py 
         --lineage 
-        --fasta ${ reads_bgzip_out ?: fasta }
+        --fasta-path ${ fasta }
+        --compression gzip
         --species ${species}
         --gff-output-path ${prefix}_helixer.gff3
 

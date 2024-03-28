@@ -57,6 +57,6 @@
                 ]
             }
         },
-        "required": ["ID"]
+        "required": ["ID", "longFastq"]
     }
 }

@@ -56,7 +56,8 @@ ch_multiqc_custom_methods_description = params.multiqc_methods_description ? fil
 //
 include { MEDAKA                    } from '../modules/local/medaka'
 include { KRAKEN2_DB_PREPARATION    } from '../modules/local/kraken2_db_preparation'
-include { BUSCO                                 } from '../modules/local/busco/main'
+include { BUSCO       } from '../modules/local/busco/main'
+include { BUSCO as BUSCO_AUTO  } from '../modules/local/busco/main'
 include { ITSX                                  } from '../modules/local/itsx'
 include { HELIXER                               } from '../modules/local/helixer'
 include { AGAT_EXTRACTSEQUENCES as GFF2PROTEIN                           } from '../modules/local/agat_extract_protein'
@@ -74,6 +75,7 @@ include { AGAT_MANAGEFUNCTIONALANNOTATION as MERGE_FUNC_ANNOTATION              
 //
 // MODULE: Installed directly from nf-core/modules
 //
+include { SEQKIT_STATS                         } from '../modules/nf-core/seqkit/stats/main'
 include { NANOPLOT                              } from '../modules/nf-core/nanoplot/main'
 include { PORECHOP_PORECHOP                     } from '../modules/nf-core/porechop/porechop/main'
 include { MINIMAP2_ALIGN                        } from '../modules/nf-core/minimap2/align/main'
@@ -84,7 +86,8 @@ include { FLYE                                  } from '../modules/nf-core/flye/
 include { RACON                                 } from '../modules/nf-core/racon/main'
 include { SAMTOOLS_SORT                         } from '../modules/nf-core/samtools/sort/main'
 include { SAMTOOLS_INDEX                        } from '../modules/nf-core/samtools/index/main'
-include { KRAKEN2_KRAKEN2 as KRAKEN2            } from '../modules/nf-core/kraken2/kraken2/main'
+include { KRAKEN2_KRAKEN2 as KRAKEN2_READS      } from '../modules/nf-core/kraken2/kraken2/main'
+include { KRAKEN2_KRAKEN2 as KRAKEN2_ASSEMBLY   } from '../modules/nf-core/kraken2/kraken2/main'
 include { QUAST                                 } from '../modules/nf-core/quast/main'
 include { GUNZIP                                } from '../modules/nf-core/gunzip/main'
 include { CUSTOM_DUMPSOFTWAREVERSIONS           } from '../modules/nf-core/custom/dumpsoftwareversions/main'
@@ -126,77 +129,40 @@ workflow FUNPHEHR {
     ch_input
         .longreads
         .filter{ it != null }
-        .set { ch_longreads }
-        
+        .set { ch_longreads } 
     //
     // MODULE: Nanoplot, quality check for nanopore reads and Quality/Length Plots
     //
-    
+    //ch_input.view()
+    CHOPPER (
+        ch_longreads
+    )
+    ch_versions= ch_versions.mix(CHOPPER.out.versions.ifEmpty(null))    
+
     ch_porechop_log_multiqc = Channel.empty()
+    
     PORECHOP_PORECHOP (
-        ch_longreads.dump(tag: 'longreads')
+        CHOPPER.out.fastq
         )
         ch_porechop_log_multiqc = PORECHOP_PORECHOP.out.log
         ch_versions = ch_versions.mix( PORECHOP_PORECHOP.out.versions.ifEmpty(null) )
     
-    CHOPPER (
-        PORECHOP_PORECHOP.out.reads
-    )
-    ch_versions= ch_versions.mix(CHOPPER.out.versions.ifEmpty(null))
+    ch_assembly = Channel.empty()
     
-    ch_for_kraken2 = PORECHOP_PORECHOP.out.reads
-    CHOPPER.out.fastq
-        .dump(tag: 'porechop')
-        .map{ meta,lr -> tuple(meta,lr) }
-        .dump(tag: 'ch_for_assembly')
-        .set { ch_for_assembly }
+    ch_for_assembly = PORECHOP_PORECHOP.out.reads
+    
 
+    
     NANOPLOT (
-        CHOPPER.out.fastq
+        PORECHOP_PORECHOP.out.reads
     )
     ch_nanoplot_txt_multiqc = NANOPLOT.out.txt
     ch_versions = ch_versions.mix(NANOPLOT.out.versions.ifEmpty(null))
 
 
     
-    // update ch_for_assmebly so if meta.id == NEG exclude from channel_for_assembly
-    ch_for_assembly = ch_for_assembly.filter{ it[0].id != 'NEG' }
-
-     // MODULE: Kraken2, QC for sample purity
-    //
-    ch_kraken_multiqc  = Channel.empty()
-    ch_kraken2db = Channel.empty()
-    if ( !params.skip_kraken2 ) {
-    // if path for directory of kraken2db is valid/exists use it to create ch_kraken2db and use the last directory as db name, else run kraken2_db_preparation with "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20210517.tar.gz"
-        if (params.kraken2db){
-            // create channel of info, db where db is the path of directory and info is the last directory name eg /scratch/kraken/bigDB will be  bigDB, /scratch/kraken/bigDB
-            // channel should look like tuple val("${pathname}"), path("db")
-            ch_kraken2db = Channel.fromPath(params.kraken2db, type: 'dir', checkIfExists: true)
-                .map{ db -> tuple(db.name, db) }
-            
-        } else {
-            KRAKEN2_DB_PREPARATION (
-                'https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20210517.tar.gz'
-            )
-            ch_kraken2db = KRAKEN2_DB_PREPARATION.out.kraken2db
-        }
-        //ch_kraken2db.view() for debugging
-        KRAKEN2(
-            ch_for_kraken2
-                .map { meta, reads ->
-                    info = [:]
-                    info.id = meta.id
-                    info.single_end = true
-                    [ info, reads ]
-                }
-                .dump(tag: 'kraken2'),
-            ch_kraken2db.map{ info, db -> db }.dump(tag: 'kraken2_db_preparation'),
-            false,
-            false
-        )
-        ch_kraken_long_multiqc = KRAKEN2.out.report
-        ch_versions = ch_versions.mix(KRAKEN2.out.versions.ifEmpty(null))
-    }
+    // update ch_for_assmebly so if meta.id contains NEG exclude from channel_for_assembly
+    ch_for_assembly = ch_for_assembly.filter{ meta, lr -> !meta.id.contains("NEG") }
 
     //
     // ASSEMBLY: Miniasm
@@ -254,7 +220,7 @@ workflow FUNPHEHR {
         FLYE (
             // take only meta and lr from meta, [], lr
             ch_for_assembly.map{ meta,lr -> tuple(meta,lr) },
-            '--nano-raw'
+            '--nano-hq'
         )
 
         ch_assembly = ch_assembly.mix( FLYE.out.fasta.dump(tag: 'flye') )
@@ -298,13 +264,6 @@ workflow FUNPHEHR {
         }
         .set{ ch_assembly_for_gunzip }
     
-    //
-    //Busco QC for assembly needs input:
-    //tuple val(meta), path('tmp_input/*')
-    //val mode                              // Required:    One of genome, proteins, or transcriptome
-    //val lineage                           // Required:    lineage to check against, "auto" enables --auto-lineage instead
-    //path busco_lineages_path              // Recommended: path to busco lineages - downloads if not set
-    //path config_file 
 
     ch_assembly 
         .map{ meta, fasta -> tuple(meta, fasta) }
@@ -316,47 +275,113 @@ workflow FUNPHEHR {
         'genome',
         'fungi_odb10',
         params.busco_db_path
-
-
     )
-    ch_busco_summary = BUSCO.out.batch_summary
-    ch_versions      = ch_versions.mix(BUSCO.out.versions.ifEmpty(null))
+    ch_busco_fungi_multiqc = BUSCO.out.batch_summary
+
+       // MODULE: Kraken2, QC for sample purity
+    //
+    ch_kraken_reads_multiqc  = Channel.empty()
+    ch_kraken2db = Channel.empty()
+    if ( !params.skip_kraken2 ) {
+    // if path for directory of kraken2db is valid/exists use it to create ch_kraken2db and use the last directory as db name, else run kraken2_db_preparation with "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20210517.tar.gz"
+        if (params.kraken2db){
+            // create channel of info, db where db is the path of directory and info is the last directory name eg /scratch/kraken/bigDB will be  bigDB, /scratch/kraken/bigDB
+            // channel should look like tuple val("${pathname}"), path("db")
+            ch_kraken2db = Channel.fromPath(params.kraken2db, type: 'dir', checkIfExists: true)
+                .map{ db -> tuple(db.name, db) }
+            
+        } else {
+            KRAKEN2_DB_PREPARATION (
+                'https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20210517.tar.gz'
+            )
+            ch_kraken2db = KRAKEN2_DB_PREPARATION.out.kraken2db
+        }
+       
+    
+
+        KRAKEN2_READS(
+            PORECHOP_PORECHOP.out.reads
+            .map { meta, reads -> 
+                info = [:]
+                info.id = meta.id
+                info.single_end = true
+                [info, reads]
+            }
+            .dump(tag: 'kraken2_reads'),
+            ch_kraken2db.map{ info, db -> db }.dump(tag: 'kraken2_db_preparation').first(),
+            false,
+            false
+        )
+        ch_kraken_reads_multiqc = KRAKEN2_READS.out.report
+        ch_versions = ch_versions.mix(KRAKEN2_READS.out.versions.ifEmpty(null))
+    }
+
+    // BUSCO_AUTO (
+    //     ch_assembly_for_busco,
+    //     'genome',
+    //     'auto',
+    //     params.busco_db_path
+    // )
+    // ch_busco_auto_summary = BUSCO_AUTO.out.batch_summary
+    // ch_versions      = ch_versions.mix(BUSCO.out.versions.ifEmpty(null))
+   
 
     ch_assembly
         .map{ meta, fasta -> tuple(meta, fasta) }
         .set{ ch_assembly_for_itsx }
-    ch_assembly_for_itsx.view()
-
+    
+    //ch_assembly_for_itsx.view()
     ITSX (
         ch_assembly_for_itsx
     )
     ch_versions = ch_versions.mix(ITSX.out.versions.ifEmpty(null))
+
+    // //need to blast the ITSX sequences to the UNITE database
+    // BLAST_BLASTN
+    
+
+
+    //ch_assembly.view()
+    ch_kraken_assembly_multiqc = Channel.empty()
+    KRAKEN2_ASSEMBLY(
+            ch_assembly
+            .map {meta, fasta ->
+                info=[:]
+                info.id = meta.id
+                info.single_end = true
+                [info, fasta]
+            }
+            .dump(tag: 'kraken2_assembly'),
+            ch_kraken2db.map{ info, db -> db }.dump(tag: 'kraken2_db_preparation').first(),
+            false,
+            false
+        )
+        ch_kraken_assembly_multiqc = KRAKEN2_ASSEMBLY.out.report
+
     // annotation if annotation=true call subworkflow annotation
-    if ( params.annotation ) {
+    if ( !params.skip_annotation ) {
+
         ch_assembly
             .map{ meta, fasta -> tuple(meta, fasta) }
             .set{ ch_assembly_for_annotation }
-        struc_func_annotation (
-            ch_assembly_for_annotation,
-            params.annotation_method,
-            params.annotation_db,
-        )
 
-    HELIXER (
+    if (params.cuda) {
+     HELIXER (
         ch_assembly_for_annotation
     )
 
     ch_versions = ch_versions.mix(HELIXER.out.versions.ifEmpty(null))
 
      GFF2PROTEIN( 
-        helixer.out.gff, 
+        HELIXER.out.gff3, 
         ch_assembly_for_annotation
     )
     ch_versions = ch_versions.mix(GFF2PROTEIN.out.versions.ifEmpty(null))
 
     BLAST_BLASTP (
-        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true)
-        params.blast_db_directory
+        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true),
+        params.blast_db_directory,
+        "6"
     )
 
     INTERPROSCAN (
@@ -366,13 +391,27 @@ workflow FUNPHEHR {
     ch_versions = ch_versions.mix(INTERPROSCAN.out.versions.ifEmpty(null))
 
     MERGE_FUNC_ANNOTATION (
-        HELIXER.out.gff,
+        HELIXER.out.gff3,
         INTERPROSCAN.out.tsv,
         BLAST_BLASTP.out.tsv,
         params.blast_db_directory
     )
+    ch_versions = ch_versions.mix(MERGE_FUNC_ANNOTATION.out.versions.ifEmpty(null))
     }
+    else {
+        FUNANNOTATE_MASK(
+            ch_assembly_for_annotation
+        )
+    
+    ch_versions = ch_versions.mix(FUNANNOTATE_MASK.out.versions.ifEmpty(null))
 
+    FUNANNOTATE_PREDICT(
+        FUNANNOTATE_MASK.out.masked_fasta
+    )
+
+
+    }
+    }
     //
     // MODULE: Pipeline reporting
     //
@@ -393,11 +432,14 @@ workflow FUNPHEHR {
         ch_multiqc_files = ch_multiqc_files.mix(ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
         ch_multiqc_files = ch_multiqc_files.mix(ch_methods_description.collectFile(name: 'methods_description_mqc.yaml'))
         ch_multiqc_files = ch_multiqc_files.mix(CUSTOM_DUMPSOFTWAREVERSIONS.out.mqc_yml.collect())
-        ch_multiqc_files = ch_multiqc_files.mix(ch_kraken_long_multiqc.collect{it[1]}.ifEmpty([]))
+        ch_multiqc_files = ch_multiqc_files.mix(ch_kraken_assembly_multiqc.collect{it[1]}.ifEmpty([]))
+        ch_multiqc_files = ch_multiqc_files.mix(ch_kraken_reads_multiqc.collect{it[1]}.ifEmpty([]))
         ch_multiqc_files = ch_multiqc_files.mix(ch_quast_multiqc.collect{it[1]}.ifEmpty([]))
         ch_multiqc_files = ch_multiqc_files.mix(ch_nanoplot_txt_multiqc.collect{it[1]}.ifEmpty([]))
         ch_multiqc_files = ch_multiqc_files.mix(ch_porechop_log_multiqc.collect{it[1]}.ifEmpty([]))
-        //ch_multiqc_files = ch_multiqc_files.mix(ch_busco_summary.collect{it[1]}.ifEmpty([]))
+        //ch_multiqc_files = ch_multiqc_files.mix(ch_busco_auto_summary.collect{it[1]}.ifEmpty([]))
+        ch_multiqc_files = ch_multiqc_files.mix(ch_busco_fungi_multiqc.collect{it[1]}.ifEmpty([]))
+        //ch_multiqc_files = ch_multiqc_files.mix(ch_kraken_assembly_multiqc.collect{it[1]}.ifEmpty([]))
 
         MULTIQC (
             ch_multiqc_files.collect(),

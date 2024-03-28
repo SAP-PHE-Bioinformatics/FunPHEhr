@@ -1,10 +1,11 @@
-process BUSCO {
+
+
+process COMPLEASM {
     tag "$meta.id"
-    label 'process_medium_mem'
+    label 'process_medium'
 
-    conda "${moduleDir}/environment.yml"
-    container "${'docker://quay.io/biocontainers/busco:5.6.1--pyhdfd78af_0' }"
-
+    conda "bioconda::0.2.4"
+    container 'biocontainers/compleasm:0.2.4--pyh7cba7a3_0'
 
     input:
     tuple val(meta), path('tmp_input/*')
@@ -13,7 +14,7 @@ process BUSCO {
     path busco_lineages_path              // Recommended: path to busco lineages - downloads if not set
 
     output:
-    tuple val(meta), path("*-busco.batch_summary.txt")                , emit: batch_summary
+    tuple val(meta), path("*summary.txt")                             , emit: batch_summary
     tuple val(meta), path("short_summary.*.txt")                      , emit: short_summaries_txt, optional: true
     tuple val(meta), path("short_summary.*.json")                     , emit: short_summaries_json, optional: true
     tuple val(meta), path("*-busco/*/run_*/full_table.tsv")           , emit: full_table, optional: true
@@ -28,31 +29,11 @@ process BUSCO {
     task.ext.when == null || task.ext.when
 
     script:
-    if ( mode !in [ 'genome', 'proteins', 'transcriptome' ] ) {
-        error "Mode must be one of 'genome', 'proteins', or 'transcriptome'."
-    }
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}-${lineage}"
-    def busco_lineage = lineage.equals('auto') ? '--auto-lineage' : "--lineage_dataset ${lineage}"
+    def busco_lineage = lineage.equals('auto') ? '--auto-lineage' : "-l ${lineage}"
     def busco_lineage_dir = busco_lineages_path ? "--download_path ${busco_lineages_path}" : ''
-    """
-    # Nextflow changes the container --entrypoint to /bin/bash (container default entrypoint: /usr/local/env-execute)
-    # Check for container variable initialisation script and source it.
-    if [ -f "/usr/local/env-activate.sh" ]; then
-        set +u  # Otherwise, errors out because of various unbound variables
-        . "/usr/local/env-activate.sh"
-        set -u
-    fi
-
-    # If the augustus config directory is not writable, then copy to writeable area
-    if [ ! -w "\${AUGUSTUS_CONFIG_PATH}" ]; then
-        # Create writable tmp directory for augustus
-        AUG_CONF_DIR=\$( mktemp -d -p \$PWD )
-        cp -r \$AUGUSTUS_CONFIG_PATH/* \$AUG_CONF_DIR
-        export AUGUSTUS_CONFIG_PATH=\$AUG_CONF_DIR
-        echo "New AUGUSTUS_CONFIG_PATH=\${AUGUSTUS_CONFIG_PATH}"
-    fi
-
+    """"
     # Ensure the input is uncompressed
     INPUT_SEQS=input_seqs
     mkdir "\$INPUT_SEQS"
@@ -66,30 +47,25 @@ process BUSCO {
     done
     cd ..
 
-    busco \\
-        --cpu $task.cpus \\
-        --in "\$INPUT_SEQS" \\
-        --out ${prefix}-busco \\
+    python compleasm.py run \\
+        -t $task.cpus \\
+        -a "\$INPUT_SEQS" \\
+        -o ${prefix} \\
         --mode $mode \\
         $busco_lineage \\
-        $busco_lineage_dir \\
-        --offline \\
+        -L $busco_lineage_dir \\
         $args
 
     # clean up
     rm -rf "\$INPUT_SEQS"
 
     # Move files to avoid staging/publishing issues
-    if ($busco_lineage == '--auto-lineage') then
-    
-        mv ${prefix}-busco/auto_lineage ${prefix}-busco/auto_lineage/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
-    else
-        mv ${prefix}-busco/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
-    fi
     mv ${prefix}-busco/batch_summary.txt ${prefix}-busco.batch_summary.txt
+    mv ${prefix}-busco/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
+
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        busco: \$( busco --version 2>&1 | sed 's/^BUSCO //' )
+        compleasm: \$( 0.2.4 )
     END_VERSIONS
     """
 }

@@ -6,7 +6,7 @@ process BUSCO {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/busco:5.5.0--pyhdfd78af_0':
         'biocontainers/busco:5.5.0--pyhdfd78af_0' }"
-
+    clusterOptions = " --nodelist=frgeneseq03"
     input:
     tuple val(meta), path('tmp_input/*')
     val mode                              // Required:    One of genome, proteins, or transcriptome
@@ -77,18 +77,23 @@ process BUSCO {
         $busco_lineage \\
         $busco_lineage_dir \\
         $busco_config \\
+        --offline \\
         $args
 
     # clean up
     rm -rf "\$INPUT_SEQS"
 
     # Move files to avoid staging/publishing issues
+    if ($busco_lineage == '--auto-lineage') then
+        mv ${prefix}-busco/auto_lineage ${prefix}-busco/auto_lineage/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
+    else
+        mv ${prefix}-busco/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
+    fi
     mv ${prefix}-busco/batch_summary.txt ${prefix}-busco.batch_summary.txt
-    mv ${prefix}-busco/*/short_summary.*.{json,txt} . || echo "Short summaries were not available: No genes were found."
-
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         busco: \$( busco --version 2>&1 | sed 's/^BUSCO //' )
     END_VERSIONS
     """
 }
+
