@@ -402,12 +402,15 @@
             "$ref": "#/definitions/assembly_parameters"
 
         },
-
         {
             "$ref": "#/definitions/trimming_parameters"
         },
         {
             "$ref": "#/definitions/assembly_polishing"
+        },
+        {
+            "$ref": "#/definitions/db_paths"   
+
         },
         {
             "$ref": "#/definitions/skipping_options"
