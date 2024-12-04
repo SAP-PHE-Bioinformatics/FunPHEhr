@@ -8,6 +8,7 @@ process EGGNOG_DOWNLOAD {
         'biocontainers/eggnog-mapper:2.1.9--pyhdfd78af_0' }"
 
     input:
+    path(data_dir)
 
     output:
     path "eggnog.db"                  , emit: eggnog_db
@@ -24,7 +25,7 @@ process EGGNOG_DOWNLOAD {
     download_eggnog_data.py \\
         $args \\
         -y \\
-        --data_dir .
+        --data_dir $data_dir
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

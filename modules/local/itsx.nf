@@ -6,7 +6,7 @@ process ITSX {
     tag "$meta.id"
     label 'process_medium'
     conda 'bioconda::itsx 1.1.3'
-    container "${'docker://quay.io/biocontainers/itsx:1.1.3--0'}"
+    container "${'docker://quay.io/biocontainers/itsx:1.1b--1'}"
 
 
     // The process takes a fasta file as input
@@ -30,7 +30,7 @@ process ITSX {
     else
         cp ${fasta} ${prefix}.fasta
     fi
-    ITSx -i ${prefix}.fasta -o ${prefix} --save_regions all --cpu $task.cpus --nhmmer T
+    ITSx -i ${prefix}.fasta -o ${prefix} --save_regions all --cpu $task.cpus 
 
 
      cat <<-END_VERSIONS > versions.yml

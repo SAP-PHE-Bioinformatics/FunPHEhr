@@ -9,13 +9,13 @@ process EGGNOG_MAPPER {
 
     input:
     tuple val(meta), path(fasta)
-    path(eggnog_files), stageAs: 'eggnog/*'
+    path(eggnog_files), stageAs: '*'
 
     output:
     tuple val(meta), path("*.emapper.hits.gz")                , emit: hits
     tuple val(meta), path("*.emapper.seed_orthologs.gz")      , emit: seed_orthologs
-    tuple val(meta), path("*.emapper.annotations.gz")         , emit: annotations
-    tuple val(meta), path("*.emapper.tsv.gz")                 , emit: emappertsv
+    tuple val(meta), path("*.emapper.annotations")         , emit: annotations
+    tuple val(meta), path("*.emapper.tsv.gz")                 , emit: tsv
     tuple val(meta), path("*.emapper.annotations.xlsx")       , emit: xlsx,      optional: true
     tuple val(meta), path("*.emapper.orthologs.gz")           , emit: orthologs, optional: true
     tuple val(meta), path("*.emapper.genepred.fasta.gz")      , emit: genepred,  optional: true
@@ -38,13 +38,15 @@ process EGGNOG_MAPPER {
         --cpu $task.cpus \\
         --data_dir eggnog \\
         --output $prefix \\
-        -i $input
+        -i $input \\
+        --itype CDS \\
+        --translate
 
     gzip ${prefix}.emapper.*
     zgrep -v '^##' ${prefix}.emapper.annotations | \\
         sed 's/^#// ; /^query/s/.*/\\L&/ ; s/query/orf/' | \\
         gzip -c > ${prefix}.emapper.tsv.gz
-
+    gzip -d ${prefix}.emapper.annotations.*
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         eggnog: \$( echo \$(emapper.py --version 2>&1)| sed 's/.* emapper-//' | sed 's/ \\/ Expected.*//')

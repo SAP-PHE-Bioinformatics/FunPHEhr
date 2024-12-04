@@ -26,6 +26,7 @@ process PORECHOP_PORECHOP {
         -i $reads \\
         -t $task.cpus \\
         $args \\
+        --no_split \\
         -o ${prefix}.fastq.gz \\
         > ${prefix}.log
     cat <<-END_VERSIONS > versions.yml

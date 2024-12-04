@@ -3,9 +3,7 @@ process CHOPPER {
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/chopper:0.3.0--hd03093a_0':
-        'biocontainers/chopper:0.3.0--hd03093a_0' }"
+    container "quay.io/biocontainers/chopper:0.8.0--hdcf5f25_0"
 
     input:
     tuple val(meta), path(fastq)

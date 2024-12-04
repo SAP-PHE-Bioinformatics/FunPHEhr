@@ -9,15 +9,14 @@ process MINIMAP2_ALIGN {
         'biocontainers/mulled-v2-66534bcbb7031a148b13e2ad42583020b9cd25c4:365b17b986c1a60c1b82c6066a9345f38317b763-0' }"
 
     input:
-    tuple val(meta), path(reads)
-    tuple val(meta2), path(reference)
+    tuple val(meta), path(reads), path(reference)
     val bam_format
     val cigar_paf_format
     val cigar_bam
 
     output:
     tuple val(meta), path("*.paf"), optional: true, emit: paf
-    tuple val(meta), path("*.bam"), optional: true, emit: bam
+    tuple val(meta), path("*.bam"), path("*.bai"), optional: true, emit: bam
     path "versions.yml"           , emit: versions
 
     when:
@@ -38,6 +37,11 @@ process MINIMAP2_ALIGN {
         $cigar_paf \\
         $set_cigar_bam \\
         $bam_output
+
+    if $bam_format == true
+    then
+        samtools index ${prefix}.bam
+    fi
 
 
     cat <<-END_VERSIONS > versions.yml

@@ -1,7 +1,7 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema",
     "$id": "https://raw.githubusercontent.com/nf-core/bacass/master/assets/schema_input.json",
-    "title": "nf-core/bacass pipeline - params.input schema",
+    "title": "funphehr pipeline - params.input schema",
     "description": "Schema for the file provided with params.input",
     "type": "array",
     "items": {
@@ -47,8 +47,8 @@
                 "meta": ["species"],
                 "anyOf": [
                     {
-                        "type": ["string", "null"],
-                        "pattern": "(\\b\\S+\\b|NA)"
+                        "type": ["string"],
+                        "pattern": "^[A-Za-z0-9_.]+$"
                     },
                     {
                         "type": "string",

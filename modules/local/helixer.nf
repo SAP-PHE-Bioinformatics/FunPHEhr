@@ -2,13 +2,14 @@ process HELIXER {
     // use conatiner in singulatirty from docker://gglyptodon/helixer-docker:helixer_v0.3.2_cuda_11.8.0-cudnn8
     //tool github https://github.com/weberlab-hhu/Helixer
     tag "$meta.id"
-    label 'process_high'
+    label 'gpu_medium'
 
     conda 'helixer=0.3.2'
     container 'docker://gglyptodon/helixer-docker:helixer_v0.3.2_cuda_11.8.0-cudnn8'
 
     input:
     tuple val(meta), file(fasta)
+    path(model)
 
     output:
     tuple val(meta), path('*_helixer.gff3')         , emit: gff3
@@ -26,12 +27,13 @@ process HELIXER {
 
 
     """
-    Helixer.py 
-        --lineage 
-        --fasta-path ${ fasta }
-        --compression gzip
-        --species ${species}
-        --gff-output-path ${prefix}_helixer.gff3
+    Helixer.py \
+        --model-filepath $model \
+        --subsequence-length 21384 \
+        --fasta-path ${ fasta } \
+        --compression gzip \
+        --species ${species} \
+        --gff-output-path ${prefix}_helixer.gff3 \
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

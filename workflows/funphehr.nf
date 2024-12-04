@@ -58,10 +58,21 @@ include { MEDAKA                    } from '../modules/local/medaka'
 include { KRAKEN2_DB_PREPARATION    } from '../modules/local/kraken2_db_preparation'
 include { BUSCO       } from '../modules/local/busco/main'
 include { BUSCO as BUSCO_AUTO  } from '../modules/local/busco/main'
+include { ANNOTATE } from '../modules/local/funannotate/annotate'
+include { EGGNOG_MAPPER }       from '../modules/local/eg_mapper'
 include { ITSX                                  } from '../modules/local/itsx'
+include { ITSX as ITSX_FULL                           } from '../modules/local/itsx'
 include { HELIXER                               } from '../modules/local/helixer'
 include { AGAT_EXTRACTSEQUENCES as GFF2PROTEIN                           } from '../modules/local/agat_extract_protein'
 include { AGAT_MANAGEFUNCTIONALANNOTATION as MERGE_FUNC_ANNOTATION                 } from '../modules/local/agat_merge_func_annotation'
+include { AURICLASS } from '../modules/local/auriclass.nf'
+include { EXTRACTKRAKENTOPMATCH as TOP_ASSEMBLY } from '../modules/local/extractkrakentopmatch'
+include { METABAT2_JGISUMMARIZEBAMCONTIGDEPTHS as DEPTH } from '../modules/nf-core/metabat2/jgisummarizebamcontigdepths/main'
+include { METABAT2_METABAT2 } from '../modules/nf-core/metabat2/metabat2/main'
+include { BARRNAP_ITS } from '../modules/local/barnap'
+include { EGGNOG_DOWNLOAD } from '../modules/local/eggnog/egg_download'
+include { AGAT_EXTRACTSEQUENCES } from '../modules/local/agat_extract_protein'
+include { MERGE_XML }   from '../modules/local/merge_xml'
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -133,7 +144,17 @@ workflow FUNPHEHR {
     //
     // MODULE: Nanoplot, quality check for nanopore reads and Quality/Length Plots
     //
-    //ch_input.view()
+    // ch_unite=Channel.fromPath(params.unite_blastdb, type: 'dir')
+
+    // if (ch_unite.isEmpty()){
+    // BLAST_MAKEBLASTDB(
+    //     ['UNITE_DB', params.unite_db]
+    // )
+    // ch_versions = ch_versions.mix(BLAST_MAKEBLASTDB.out.versions.ifEmpty(null))
+    // ch_unite = BLAST_MAKEBLASTDB.out.db
+    // }
+
+
     CHOPPER (
         ch_longreads
     )
@@ -141,8 +162,23 @@ workflow FUNPHEHR {
 
     ch_porechop_log_multiqc = Channel.empty()
     
+    ch_reads = CHOPPER.out.fastq
+    .map { meta, fastq -> 
+        def readCount = fastq.countFastq()
+        // Create a new tuple that includes both meta and fastq
+        return [meta + [reads: readCount], fastq] // Append read count and return both
+    }
+    .view()
+    
+    
+    ch_reads_positive = ch_reads.filter{ updatedMeta, fastq -> updatedMeta['reads'] > 0 }
+
+    // Filter for reads = 0
+    ch_reads_zero = ch_reads.filter{ updatedMeta, fastq -> updatedMeta['reads'] == 0 }
+
+    
     PORECHOP_PORECHOP (
-        CHOPPER.out.fastq
+        ch_reads_positive
         )
         ch_porechop_log_multiqc = PORECHOP_PORECHOP.out.log
         ch_versions = ch_versions.mix( PORECHOP_PORECHOP.out.versions.ifEmpty(null) )
@@ -152,14 +188,11 @@ workflow FUNPHEHR {
     ch_for_assembly = PORECHOP_PORECHOP.out.reads
     
 
-    
     NANOPLOT (
-        PORECHOP_PORECHOP.out.reads
+        ch_for_assembly
     )
     ch_nanoplot_txt_multiqc = NANOPLOT.out.txt
     ch_versions = ch_versions.mix(NANOPLOT.out.versions.ifEmpty(null))
-
-
     
     // update ch_for_assmebly so if meta.id contains NEG exclude from channel_for_assembly
     ch_for_assembly = ch_for_assembly.filter{ meta, lr -> !meta.id.contains("NEG") }
@@ -226,6 +259,15 @@ workflow FUNPHEHR {
         ch_assembly = ch_assembly.mix( FLYE.out.fasta.dump(tag: 'flye') )
         ch_versions = ch_versions.mix( FLYE.out.versions.ifEmpty(null) )
     }
+    // MINIMAP2_ALIGN (
+    //     (ch_for_assembly
+    //     .join (ch_assembly, by: [0][0])
+    //     .map{ meta, lr, assembly -> tuple(meta, lr, assembly) }),
+    //     true,
+    //     false,
+    //     false
+    // )
+    // ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions.ifEmpty(null))
     //
     // MODULE: Medaka, polishes assembly - should take either miniasm or flye consensus sequence
     //
@@ -239,7 +281,6 @@ workflow FUNPHEHR {
         ch_versions = ch_versions.mix(MEDAKA.out.versions.ifEmpty(null))
     }
 
-    
     //
     // MODULE: QUAST, assembly QC
     //
@@ -248,9 +289,16 @@ workflow FUNPHEHR {
         .map { consensus_collect -> tuple([id: "report"], consensus_collect) }
         .set { ch_to_quast }
 
+    if (params.quast_reference != '') {
+        ref_to_quast = Channel.fromPath(params.quast_reference)
+            .map { ref -> tuple([id: "reference"], ref) }
+            .set { ref_to_quast }
+    }
+    
+
     QUAST (
         ch_to_quast,
-        [[:],[]],
+        ref_to_quast ? ref_to_quast : [[:],[]],
         [[:],[]]
     )
     ch_quast_multiqc = QUAST.out.tsv
@@ -276,7 +324,8 @@ workflow FUNPHEHR {
         'fungi_odb10',
         params.busco_db_path
     )
-    ch_busco_fungi_multiqc = BUSCO.out.batch_summary
+    ch_versions = ch_versions.mix(BUSCO.out.versions.ifEmpty(null))
+    ch_busco_fungi_multiqc = BUSCO.out.short_summaries_txt
 
        // MODULE: Kraken2, QC for sample purity
     //
@@ -297,7 +346,6 @@ workflow FUNPHEHR {
             ch_kraken2db = KRAKEN2_DB_PREPARATION.out.kraken2db
         }
        
-    
 
         KRAKEN2_READS(
             PORECHOP_PORECHOP.out.reads
@@ -324,24 +372,25 @@ workflow FUNPHEHR {
     // )
     // ch_busco_auto_summary = BUSCO_AUTO.out.batch_summary
     // ch_versions      = ch_versions.mix(BUSCO.out.versions.ifEmpty(null))
-   
 
-    ch_assembly
-        .map{ meta, fasta -> tuple(meta, fasta) }
-        .set{ ch_assembly_for_itsx }
-    
-    //ch_assembly_for_itsx.view()
-    ITSX (
-        ch_assembly_for_itsx
-    )
-    ch_versions = ch_versions.mix(ITSX.out.versions.ifEmpty(null))
 
     // //need to blast the ITSX sequences to the UNITE database
     // BLAST_BLASTN
-    
 
 
-    //ch_assembly.view()
+    ch_cauris = ch_assembly.filter{ meta, lr -> meta.species.contains("Candida_auris") }
+
+    AURICLASS (
+        ch_cauris
+    )
+    ch_versions = ch_versions.mix(AURICLASS.out.versions.ifEmpty(null))
+
+    // DEPTH (
+    //     MINIMAP2_ALIGN.out.bam
+    // )
+    // ch_versions = ch_versions.mix(DEPTH.out.versions.ifEmpty(null))
+
+   
     ch_kraken_assembly_multiqc = Channel.empty()
     KRAKEN2_ASSEMBLY(
             ch_assembly
@@ -353,65 +402,152 @@ workflow FUNPHEHR {
             }
             .dump(tag: 'kraken2_assembly'),
             ch_kraken2db.map{ info, db -> db }.dump(tag: 'kraken2_db_preparation').first(),
-            false,
-            false
+            true,
+            true
         )
-        ch_kraken_assembly_multiqc = KRAKEN2_ASSEMBLY.out.report
+        ch_kraken_assembly_multiqc = KRAKEN2_ASSEMBLY.out.report 
+
+    // get the top match from the KRAKREN2_ASSEMBLY.out.report (txt file) and extract contigs that match taxid from the ch_assembly using krakentools_extractkrakenreads
+    // get top percent from the KRAKEN2_ASSEMBLY.out.report (txt file) in first column where the 4th coumn must be G for genus and output the taxid in column 5
+    // use a helper function to extract the taxid from the report file.
+
+    //collect files based on the meta.id which is the sample name for all three files for top_assembly
+    KRAKEN2_ASSEMBLY.out.report
+        .join(KRAKEN2_ASSEMBLY.out.classified_reads_fastq, by: [0][0])
+        .join(KRAKEN2_ASSEMBLY.out.classified_reads_assignment, by : [0][0])
+        .map{ meta, report, fastq, assignment -> tuple(meta, report, fastq, assignment) }
+        .set{ ch_assembly_kraken }
+    //ch_assembly_kraken.view()
+       
+    TOP_ASSEMBLY (
+        ch_assembly_kraken
+    )   
+
+    ch_assembly_for_itsx = Channel.empty()
+    
+    TOP_ASSEMBLY.out.extracted_kraken2_reads
+        .map{ meta, fasta -> tuple(meta, fasta) }
+        .set{ ch_assembly_for_itsx }
+
+    // BARRNAP_ITS( 
+    //     ch_assembly_for_itsx
+    // )
+
+    ITSX (
+        ch_assembly_for_itsx
+        .dump(tag: 'itsx')
+    )
+    ch_versions = ch_versions.mix(ITSX.out.versions.ifEmpty(null))
+
+    ITSX_FULL (
+        ch_assembly
+        .dump(tag: 'itsx')
+    )
+    ch_versions = ch_versions.mix(ITSX.out.versions.ifEmpty(null))
+    ch_assembly_for_annotation = ch_assembly_for_itsx
+
 
     // annotation if annotation=true call subworkflow annotation
     if ( !params.skip_annotation ) {
 
-        ch_assembly
+        TOP_ASSEMBLY.out.extracted_kraken2_reads
             .map{ meta, fasta -> tuple(meta, fasta) }
             .set{ ch_assembly_for_annotation }
 
+    
     if (params.cuda) {
      HELIXER (
+        ch_assembly_for_annotation,
+        params.helixer_fungi_model 
+    )
+    ch_inference = HELIXER.out.gff3
+    //ch_versions = ch_versions.mix(HELIXER.out.versions.ifEmpty(null))
+    }
+    else
+    {
+    FUNANNOTATE_MASK(
         ch_assembly_for_annotation
     )
-
-    ch_versions = ch_versions.mix(HELIXER.out.versions.ifEmpty(null))
-
-     GFF2PROTEIN( 
-        HELIXER.out.gff3, 
-        ch_assembly_for_annotation
+    FUNANNOTATE_PREDICT(
+        FUNANNOTATE_MASK.out.masked
     )
-    ch_versions = ch_versions.mix(GFF2PROTEIN.out.versions.ifEmpty(null))
+    ch_inference = FUNANNOTATE_PREDICT.out.struct
+    }
 
-    BLAST_BLASTP (
-        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true),
-        params.blast_db_directory,
-        "6"
+    ch_pro = Channel.empty()
+    ch_assembly_for_annotation
+        .join(ch_inference)
+        .map{ meta, fasta, gff3 -> tuple((meta), fasta, gff3) }
+        .set { ch_pro }
+    
+    AGAT_EXTRACTSEQUENCES (
+        ch_pro
     )
+    ch_versions = ch_versions.mix(AGAT_EXTRACTSEQUENCES.out.versions.ifEmpty(null))
 
-    INTERPROSCAN (
-        GFF2PROTEIN.out.proteins.splitFasta(by: 1000, file: true),
+    // FUNANNOTATE_IPRSCAN(
+    //     AGAT_EXTRACTSEQUENCES.out.proteins
+    // )
+    // ch_versions = ch_versions.mix(FUNANNOTATE_IPRSCAN.out.versions.ifEmpty(null))
+    ch_chopped_pro =Channel.empty()
+    //need to splitfasta to 150 and then have a meta.fasta incremented to differentiate the files.
+    AGAT_EXTRACTSEQUENCES.out.proteins
+        .splitFasta(by: 600, file: true)
+        .map{ meta, fasta -> tuple(meta, fasta)}
+        .set{ch_chopped_pro}
+    //ch_chopped_pro.view()
+
+    INTERPROSCAN(
+        ch_chopped_pro,
         params.interproscan_db_directory
     )
     ch_versions = ch_versions.mix(INTERPROSCAN.out.versions.ifEmpty(null))
+    //INTERPROSCAN.out.tsv.view()
+    // INTERPROSCAN.out.tsv
+    //     .map{ meta, tsv -> tsv }
+    //     .collectFile(name: 'merged_interpro.tsv')
+    //     .set{ ch_interpro }
+    ch_interpro=Channel.empty()
+     INTERPROSCAN.out.xml
+        .map { meta, xml -> tuple(meta.id, xml) }  // Extract ID from meta and create tuple
+        .collectFile(sort: {it[0]}, name: 'merged_interpro.xml')
+        .map { xml -> tuple(id:xml.baseName,single_end:true, xml) }
+        .set { ch_interpro }
 
-    MERGE_FUNC_ANNOTATION (
-        HELIXER.out.gff3,
-        INTERPROSCAN.out.tsv,
-        BLAST_BLASTP.out.tsv,
-        params.blast_db_directory
+    INTERPROSCAN.out.xml
+        .map { meta, xml -> tuple(meta, xml) }
+        .groupTuple(by: [0][0])
+        .set { ch_xmls }
+
+    MERGE_XML(
+        ch_xmls
     )
-    ch_versions = ch_versions.mix(MERGE_FUNC_ANNOTATION.out.versions.ifEmpty(null))
-    }
-    else {
-        FUNANNOTATE_MASK(
-            ch_assembly_for_annotation
-        )
+
+
+    // EGGNOG_DOWNLOAD (
+    //     params.eggnog_db_directory
+    // )
     
-    ch_versions = ch_versions.mix(FUNANNOTATE_MASK.out.versions.ifEmpty(null))
-
-    FUNANNOTATE_PREDICT(
-        FUNANNOTATE_MASK.out.masked_fasta
+    EGGNOG_MAPPER (
+        AGAT_EXTRACTSEQUENCES.out.proteins,
+        params.eggnog_db_directory
     )
+    ch_versions = ch_versions.mix(EGGNOG_MAPPER.out.versions.ifEmpty(null))
 
+    ch_pro
+        .join(EGGNOG_MAPPER.out.annotations, by: [0][0])
+        .join(MERGE_XML.out.xml, by: [0][0], failOnMismatch: true)
+        .set { ch_pro } 
 
+    ANNOTATE(
+        ch_pro.map{ meta, fasta, gff3, eggnog, interpro -> tuple(meta, fasta, gff3, interpro, eggnog) },
+    )
+    ch_versions = ch_versions.mix(ANNOTATE.out.versions.ifEmpty(null))
     }
-    }
+
+    // SUMMARY(
+
+    // )
     //
     // MODULE: Pipeline reporting
     //

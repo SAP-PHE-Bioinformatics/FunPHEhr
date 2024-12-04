@@ -20,8 +20,7 @@ process FUNANNOTATE_PREDICT {
     def prefix = task.ext.prefix ?: "${meta.id}"
     // if fasta is gzipped, unzip it
     """
-    funannotate predict -i ${fasta} -o ${prefix} --species ${args} 
-
+    funannotate predict -i ${fasta} -o ${prefix} --species ${meta.species} 
 
      cat <<-END_VERSIONS > versions.yml
     "${task.process}":

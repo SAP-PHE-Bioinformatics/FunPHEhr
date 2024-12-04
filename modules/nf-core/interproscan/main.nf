@@ -1,15 +1,14 @@
 process INTERPROSCAN {
     tag "$meta.id"
-    label 'process_long'
+    label 'process_medium_mem'
 
     conda "${moduleDir}/environment.yml"
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/interproscan:5.59_91.0--hec16e2b_1' :
-        'biocontainers/interproscan:5.59_91.0--hec16e2b_1' }"
+    container "docker://interpro/interproscan:latest"
+    clusterOptions = " --nodelist=frgeneseq-control"
 
     input:
     tuple val(meta), path(fasta)
-    val(out_ext)
+    path(interproscan_database, stageAs: 'data')
 
     output:
     tuple val(meta), path('*.tsv') , optional: true, emit: tsv
@@ -26,63 +25,41 @@ process INTERPROSCAN {
     def prefix = task.ext.prefix ?: "${meta.id}"
     def is_compressed = fasta.name.endsWith(".gz")
     def fasta_name = fasta.name.replace(".gz", "")
-
-    def appl = "-appl TIGRFAM,FunFam,SFLD,PANTHER,Gene3D,Hamap,ProSiteProfiles,Coils,SMART,CDD,PRINTS,PIRSR,ProSitePatterns,AntiFam,Pfam,MobiDBLite"
-    if ( args.contains("-appl") ) {
-        appl = ""
-    }
-    switch ( out_ext ) {
-        case "tsv": break
-        case "xml": break
-        case "gff3": break
-        case "json": break
-        default:
-            out_ext = 'tsv';
-            log.warn("Unknown output file format provided (${out_ext}): selecting tsv as fallback");
-            break
-    }
-
-    //  -dp (disable precalculation) is on so no online dependency
+    def file_name = fasta_name.replace(".fasta", "")
     """
-    if [ "${is_compressed}" == "true" ]; then
+    if [ -d 'data' ]; then
+        # Find interproscan.properties to link data/ from work directory
+        INTERPROSCAN_DIR="./data"
+        INTERPROSCAN_PROPERTIES="./data/interproscan.properties"
+        cp "\$INTERPROSCAN_PROPERTIES" .
+        sed -i "/^bin\\.directory=/ s|.*|bin.directory=\$INTERPROSCAN_DIR/bin|" interproscan.properties
+        export INTERPROSCAN_CONF=interproscan.properties
+    fi # else use sample DB included with conda ( testing only! )
+
+    if ${is_compressed} ; then
         gzip -c -d ${fasta} > ${fasta_name}
     fi
 
-    interproscan.sh \\
-        -cpu ${task.cpus} \\
-        -i ${fasta_name} \\
-        -f ${out_ext} \\
-        -dp \\
-        ${appl} \\
+    ./data/interproscan.sh \\
+        --cpu ${task.cpus} \\
+        --input ${fasta_name} \\
         ${args} \\
-        -o ${prefix}.${out_ext}
+        --output-file-base ${file_name}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        interproscan: \$(echo \$(interproscan.sh --version 2>&1) | head -n 1 | sed 's/^.*InterProScan version//' | sed 's/\\s*InterProScan.*//')
+        interproscan: \$( interproscan.sh --version | sed '1!d; s/.*version //' )
     END_VERSIONS
     """
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
-
-    switch ( out_ext ) {
-        case "tsv": break
-        case "xml": break
-        case "gff3": break
-        case "json": break
-        default:
-            out_ext = 'tsv';
-            log.warn("Unknown output file format provided (${out_ext}): selecting tsv as fallback");
-            break
-    }
-
     """
-    touch ${prefix}.${out_ext}
+    touch ${prefix}.{tsv,xml,json,gff3}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        interproscan: \$(echo \$(interproscan.sh --version 2>&1) | head -n 1 | sed 's/^.*InterProScan version//' | sed 's/\\s*InterProScan.*//')
+        interproscan: \$( interproscan.sh --version | sed '1!d; s/.*version //' )
     END_VERSIONS
     """
 }

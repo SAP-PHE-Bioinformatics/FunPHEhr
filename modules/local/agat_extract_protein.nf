@@ -1,5 +1,5 @@
 process AGAT_EXTRACTSEQUENCES {
-    tag "${gff.baseName}"
+    tag "${meta.id}"
     label 'process_single'
 
     // WARN: Version information not provided by tool on CLI. Please update version string below when bumping container versions.
@@ -9,11 +9,11 @@ process AGAT_EXTRACTSEQUENCES {
         'biocontainers/agat:0.9.2--pl5321hdfd78af_1' }"
 
     input:
-    tuple val(meta), path (gff)
-    path genome
+    tuple val(meta), path(genome), path(gff)
+    
 
     output:
-    tuple val(meta), path ("${gff.baseName}_proteins.fasta"), emit: proteins
+    tuple val(meta), path ("${meta.id}_proteins.fasta"), emit: proteins
     path "versions.yml"                                     , emit: versions
 
     when:
@@ -21,7 +21,7 @@ process AGAT_EXTRACTSEQUENCES {
 
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${gff.baseName}"
+    def prefix = task.ext.prefix ?: "${meta.id}"
     def VERSION = '0.9.2'  // WARN: Version information not provided by tool on CLI. Please update this string when bumping container versions.
     """
     agat_sp_extract_sequences.pl \\
